@@ -1,7 +1,10 @@
 import { PrismaClient, UserRole } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import * as bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 5 });
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 async function main() {
   console.log('Seeding Cherry-Up database...');
@@ -136,19 +139,30 @@ async function main() {
     });
   }
 
-  await prisma.competitor.createMany({
-    data: [
-      { socialAccountId: account.id, username: 'competitor_one', followerCount: 25000, engagementRate: 3.2 },
-      { socialAccountId: account.id, username: 'competitor_two', followerCount: 18000, engagementRate: 4.1 },
-    ],
-  });
+  for (const comp of [
+    { username: 'competitor_one', followerCount: 25000, engagementRate: 3.2 },
+    { username: 'competitor_two', followerCount: 18000, engagementRate: 4.1 },
+  ]) {
+    await prisma.competitor.upsert({
+      where: { socialAccountId_username: { socialAccountId: account.id, username: comp.username } },
+      update: {},
+      create: { socialAccountId: account.id, ...comp },
+    });
+  }
 
-  await prisma.notification.createMany({
-    data: [
-      { userId: demoUser.id, type: 'DASHBOARD', title: 'Welcome to Cherry-Up!', message: 'Connect your Instagram to unlock full analytics.' },
-      { userId: demoUser.id, type: 'MILESTONE', title: '15K Followers!', message: 'You reached 15,000 followers. Keep growing!' },
-    ],
-  });
+  const notifications = [
+    { type: 'DASHBOARD' as const, title: 'Welcome to Cherry-Up!', message: 'Connect your Instagram to unlock full analytics.' },
+    { type: 'MILESTONE' as const, title: '15K Followers!', message: 'You reached 15,000 followers. Keep growing!' },
+  ];
+
+  for (const notif of notifications) {
+    const existing = await prisma.notification.findFirst({
+      where: { userId: demoUser.id, title: notif.title },
+    });
+    if (!existing) {
+      await prisma.notification.create({ data: { userId: demoUser.id, ...notif } });
+    }
+  }
 
   console.log('Seed complete!');
   console.log(`Admin: admin@cherry-up.com / Admin123!`);
@@ -157,4 +171,7 @@ async function main() {
 
 main()
   .catch(console.error)
-  .finally(() => prisma.$disconnect());
+  .finally(async () => {
+    await prisma.$disconnect();
+    await pool.end();
+  });
