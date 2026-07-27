@@ -63,14 +63,18 @@ export const api = {
     get: (token: string) => request<Record<string, unknown>>('/dashboard', { token }),
   },
   content: {
-    generateCaption: (token: string, data: { topic: string; tone?: string; niche?: string }) =>
-      request('/content/caption', { method: 'POST', token, body: JSON.stringify(data) }),
-    suggestHashtags: (token: string, data: { content: string; niche?: string }) =>
-      request('/content/hashtags', { method: 'POST', token, body: JSON.stringify(data) }),
-    analyzeIdea: (token: string, data: { idea: string }) =>
-      request('/content/analyze-idea', { method: 'POST', token, body: JSON.stringify(data) }),
-    generateReelHook: (token: string, data: { topic: string }) =>
-      request('/content/reel-hook', { method: 'POST', token, body: JSON.stringify(data) }),
+    generateCaption: (token: string, data: { topic: string; tone?: string; niche?: string; voiceProfile?: string; humanize?: boolean }) =>
+      request<{ caption: string; humanScore: number; voiceProfile: string }>('/content/caption', { method: 'POST', token, body: JSON.stringify(data) }),
+    suggestHashtags: (token: string, data: { content: string; niche?: string; voiceProfile?: string }) =>
+      request<{ hashtags: string[]; humanScore: number }>('/content/hashtags', { method: 'POST', token, body: JSON.stringify(data) }),
+    analyzeIdea: (token: string, data: { idea: string; voiceProfile?: string }) =>
+      request<{ analysis: string; humanScore: number }>('/content/analyze-idea', { method: 'POST', token, body: JSON.stringify(data) }),
+    generateReelHook: (token: string, data: { topic: string; voiceProfile?: string }) =>
+      request<{ hooks: string; humanScore: number }>('/content/reel-hook', { method: 'POST', token, body: JSON.stringify(data) }),
+    humanize: (token: string, data: { text: string; voiceProfile?: string }) =>
+      request<{ text: string; humanScore: number; improvement: number }>('/content/humanize', { method: 'POST', token, body: JSON.stringify(data) }),
+    getVoiceProfiles: (token: string) =>
+      request<{ profiles: Array<{ id: string; description: string }> }>('/content/voice-profiles', { token }),
   },
   analytics: {
     getPosts: (token: string) => request('/analytics/posts', { token }),
@@ -90,7 +94,7 @@ export const api = {
       request(`/automation/${id}/approve`, { method: 'POST', token }),
     reject: (token: string, id: string) =>
       request(`/automation/${id}/reject`, { method: 'POST', token }),
-    getTrustScore: (token: string) => request<{ trustScore: number }>('/automation/trust-score', { token }),
+    getTrustScore: (token: string) => request<{ trustScore: number; activityNaturalness: { score: number; verdict: string; flags: string[] } }>('/automation/trust-score', { token }),
   },
   recommendations: {
     getAll: (token: string) => request<Array<Record<string, unknown>>>('/recommendations', { token }),

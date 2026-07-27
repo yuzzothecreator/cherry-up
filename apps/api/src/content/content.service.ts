@@ -17,6 +17,15 @@ export class GenerateCaptionDto {
   @IsOptional()
   @IsString()
   niche?: string;
+
+  @ApiProperty({ required: false, enum: ['casual', 'storyteller', 'expert', 'witty', 'warm'] })
+  @IsOptional()
+  @IsString()
+  voiceProfile?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  humanize?: boolean;
 }
 
 export class SuggestHashtagsDto {
@@ -54,6 +63,22 @@ export class ReelHookDto {
   @IsOptional()
   @IsString()
   style?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  voiceProfile?: string;
+}
+
+export class HumanizeTextDto {
+  @ApiProperty()
+  @IsString()
+  text: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  voiceProfile?: string;
 }
 
 @Injectable()
@@ -74,6 +99,14 @@ export class ContentService {
 
   generateReelHook(userId: string, dto: ReelHookDto) {
     return this.ai.generateReelHook(userId, dto as unknown as Record<string, unknown>);
+  }
+
+  humanizeText(userId: string, dto: HumanizeTextDto) {
+    return this.ai.humanizeText(userId, dto as unknown as Record<string, unknown>);
+  }
+
+  getVoiceProfiles(userId: string) {
+    return this.ai.getVoiceProfiles(userId);
   }
 
   async analyzePost(userId: string, postId: string) {

@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/com
 import { PrismaService } from '../prisma/prisma.module';
 import { AuditService } from '../audit/audit.service';
 import { AutomationActionType, AutomationStatus, AuditAction, Prisma } from '@prisma/client';
+import { HumanScheduler } from './human-scheduler';
 
 const RATE_LIMITS: Record<AutomationActionType, { maxPerHour: number; minIntervalMs: number }> = {
   SCHEDULE_POST: { maxPerHour: 3, minIntervalMs: 3600000 },
@@ -33,6 +34,11 @@ export class AutomationService {
 
     const trustScore = await this.calculateTrustScore(userId);
 
+    const lastAction = await this.prisma.automationAction.findFirst({
+      where: { userId, type },
+      orderBy: { createdAt: 'desc' },
+    });
+
     const action = await this.prisma.automationAction.create({
       data: {
         userId,
@@ -44,7 +50,7 @@ export class AutomationService {
         rateLimitKey,
         scheduledFor: payload.scheduledFor
           ? new Date(payload.scheduledFor as string)
-          : this.getHumanLikeSchedule(),
+          : HumanScheduler.scheduleNext(this.getBaseDelay(type), lastAction?.createdAt),
       },
     });
 
@@ -117,7 +123,21 @@ export class AutomationService {
   }
 
   async getTrustScore(userId: string) {
-    return { trustScore: await this.calculateTrustScore(userId) };
+    const trustScore = await this.calculateTrustScore(userId);
+    const recentActions = await this.prisma.automationAction.findMany({
+      where: { userId, scheduledFor: { not: null } },
+      orderBy: { scheduledFor: 'desc' },
+      take: 10,
+      select: { scheduledFor: true },
+    });
+
+    const timestamps = recentActions
+      .map((a) => a.scheduledFor)
+      .filter((d): d is Date => d !== null);
+
+    const naturalness = HumanScheduler.scoreActivitySpread(timestamps);
+
+    return { trustScore, activityNaturalness: naturalness };
   }
 
   private validatePayload(type: AutomationActionType, payload: Record<string, unknown>) {
@@ -168,10 +188,15 @@ export class AutomationService {
     return Math.max(0, Math.min(100, Math.round(approvalRate * 100 - rejectionPenalty)));
   }
 
-  private getHumanLikeSchedule(): Date {
-    const now = new Date();
-    const randomMinutes = Math.floor(Math.random() * 120) + 30;
-    return new Date(now.getTime() + randomMinutes * 60000);
+  private getBaseDelay(type: AutomationActionType): number {
+    const delays: Record<AutomationActionType, number> = {
+      SCHEDULE_POST: 90,
+      DRAFT_CAPTION: 20,
+      SUGGEST_HASHTAGS: 15,
+      ANALYZE_CONTENT: 45,
+      COMPETITOR_SCAN: 120,
+    };
+    return delays[type];
   }
 
   private async getActionForUser(userId: string, actionId: string) {

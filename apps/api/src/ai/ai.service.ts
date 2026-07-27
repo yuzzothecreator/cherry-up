@@ -51,6 +51,22 @@ export class AiService {
     return this.callAi(userId, '/audience/score', data);
   }
 
+  async humanizeText(userId: string, data: Record<string, unknown>) {
+    return this.callAi(userId, '/content/humanize', data);
+  }
+
+  async getVoiceProfiles(userId: string) {
+    return this.callAiGet(userId, '/content/voice-profiles');
+  }
+
+  private async callAiGet(userId: string, endpoint: string) {
+    const response = await axios.get(`${this.baseUrl}/api/v1${endpoint}`, {
+      timeout: 30000,
+      headers: { 'X-User-Id': userId },
+    });
+    return response.data;
+  }
+
   private async callAi(userId: string, endpoint: string, data: Record<string, unknown>) {
     const response = await axios.post(`${this.baseUrl}/api/v1${endpoint}`, data, {
       timeout: 60000,

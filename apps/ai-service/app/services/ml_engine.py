@@ -1,6 +1,8 @@
 import numpy as np
+import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.cluster import KMeans
 
 class RecommendationEngine:
     def __init__(self):
@@ -43,6 +45,77 @@ class RecommendationEngine:
             "activeHours": {"6": 15, "9": 25, "12": 40, "15": 35, "18": 75, "21": 60},
             "insights": {"trend": "growing", "engagementPattern": "evening_peak"},
         }
+
+    def analyze_writing_fingerprint(self, captions: list[str]) -> dict:
+        """
+        Extract a creator's natural writing patterns from past captions.
+        Used to personalize AI output toward their authentic voice.
+        """
+        if not captions or len(captions) < 2:
+            return {"profile": "casual", "confidence": 0.3, "traits": {}}
+
+        texts = [c for c in captions if c and len(c) > 10]
+        if len(texts) < 2:
+            return {"profile": "casual", "confidence": 0.3, "traits": {}}
+
+        avg_len = np.mean([len(t.split()) for t in texts])
+        avg_sentence = np.mean([len(re.split(r'[.!?]+', t)) for t in texts])
+        emoji_rate = np.mean([sum(1 for c in t if ord(c) > 0x1F600) / max(len(t), 1) for t in texts])
+        contraction_rate = np.mean([
+            len(re.findall(r"\b\w+'\w+\b", t)) / max(len(t.split()), 1)
+            for t in texts
+        ])
+
+        traits = {
+            "avgWordCount": round(avg_len, 1),
+            "avgSentences": round(avg_sentence, 1),
+            "emojiRate": round(emoji_rate, 3),
+            "contractionRate": round(contraction_rate, 3),
+        }
+
+        # Infer best voice profile from patterns
+        if emoji_rate > 0.02 and avg_len < 80:
+            profile = "casual"
+        elif avg_len > 120:
+            profile = "storyteller"
+        elif contraction_rate < 0.05 and avg_len < 60:
+            profile = "expert"
+        else:
+            profile = "warm"
+
+        confidence = min(0.95, 0.4 + len(texts) * 0.05)
+
+        return {"profile": profile, "confidence": round(confidence, 2), "traits": traits}
+
+    def cluster_content_topics(self, posts: list) -> list:
+        """Find natural topic clusters from post captions/hashtags."""
+        texts = []
+        for p in posts:
+            caption = p.get("caption", "") or ""
+            tags = " ".join(p.get("hashtags", []))
+            texts.append(f"{caption} {tags}".strip())
+
+        if len(texts) < 3:
+            return [{"topic": "general", "count": len(texts), "avgEngagement": 0}]
+
+        try:
+            tfidf = self.vectorizer.fit_transform(texts)
+            n_clusters = min(3, len(texts))
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+            labels = kmeans.fit_predict(tfidf)
+
+            clusters = []
+            for i in range(n_clusters):
+                cluster_posts = [posts[j] for j in range(len(posts)) if labels[j] == i]
+                eng = np.mean([p.get("engagementRate", 0) for p in cluster_posts])
+                clusters.append({
+                    "topic": f"cluster_{i + 1}",
+                    "count": len(cluster_posts),
+                    "avgEngagement": round(float(eng), 2),
+                })
+            return sorted(clusters, key=lambda x: -x["avgEngagement"])
+        except Exception:
+            return [{"topic": "mixed", "count": len(posts), "avgEngagement": 0}]
 
     def recommend_content(self, recent_posts: list) -> list:
         type_counts = {}

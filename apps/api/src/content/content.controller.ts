@@ -6,6 +6,7 @@ import {
   SuggestHashtagsDto,
   AnalyzeIdeaDto,
   ReelHookDto,
+  HumanizeTextDto,
 } from './content.service';
 import { CurrentUser, AuthUser } from '../common/current-user.decorator';
 import { AiService } from '../ai/ai.service';
@@ -41,6 +42,18 @@ export class ContentController {
   @ApiOperation({ summary: 'Generate Reel hook' })
   generateReelHook(@CurrentUser() user: AuthUser, @Body() dto: ReelHookDto) {
     return this.contentService.generateReelHook(user.id, dto);
+  }
+
+  @Post('humanize')
+  @ApiOperation({ summary: 'Humanize existing text to sound more natural' })
+  humanize(@CurrentUser() user: AuthUser, @Body() dto: HumanizeTextDto) {
+    return this.contentService.humanizeText(user.id, dto);
+  }
+
+  @Get('voice-profiles')
+  @ApiOperation({ summary: 'List available voice profiles' })
+  getVoiceProfiles(@CurrentUser() user: AuthUser) {
+    return this.contentService.getVoiceProfiles(user.id);
   }
 
   @Get('posting-times')

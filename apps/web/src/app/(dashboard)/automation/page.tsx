@@ -22,11 +22,15 @@ export default function AutomationPage() {
   const token = useAuthStore((s) => s.accessToken);
   const [actions, setActions] = useState<AutomationAction[]>([]);
   const [trustScore, setTrustScore] = useState(100);
+  const [naturalness, setNaturalness] = useState<{ score: number; verdict: string } | null>(null);
 
   useEffect(() => {
     if (!token) return;
     api.automation.getActions(token).then(setActions).catch(console.error);
-    api.automation.getTrustScore(token).then((d: { trustScore: number }) => setTrustScore(d.trustScore)).catch(console.error);
+    api.automation.getTrustScore(token).then((d) => {
+      setTrustScore(d.trustScore);
+      setNaturalness(d.activityNaturalness);
+    }).catch(console.error);
   }, [token]);
 
   async function handleApprove(id: string) {
@@ -63,12 +67,19 @@ export default function AutomationPage() {
     <>
       <TopBar title="Safe Automation" />
       <div className="p-8">
-        <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <div className="mb-6 grid gap-4 md:grid-cols-4">
           <Card>
             <CardContent className="pt-6">
               <p className="text-sm text-muted-foreground">Trust Score</p>
               <p className="text-3xl font-bold gradient-text">{trustScore}</p>
               <Progress value={trustScore} className="mt-2" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground">Activity Naturalness</p>
+              <p className="text-3xl font-bold">{naturalness?.score ?? '—'}</p>
+              <p className="text-xs text-muted-foreground mt-1 capitalize">{naturalness?.verdict?.replace(/_/g, ' ') ?? 'calculating...'}</p>
             </CardContent>
           </Card>
           <Card>
@@ -79,8 +90,8 @@ export default function AutomationPage() {
           </Card>
           <Card>
             <CardContent className="pt-6">
-              <p className="text-sm text-muted-foreground">Policy</p>
-              <p className="text-sm mt-2">All actions require user approval. No spam or bot activity.</p>
+              <p className="text-sm text-muted-foreground">Scheduling</p>
+              <p className="text-sm mt-2">Irregular timing, non-round minutes, activity-window aligned.</p>
             </CardContent>
           </Card>
         </div>
