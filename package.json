@@ -1,0 +1,29 @@
+{
+  "name": "cherry-up",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cherry-Up — AI-powered Instagram Growth Assistant (GrowthAI)",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\" \"npm run dev:ai\"",
+    "dev:api": "npm run start:dev --workspace=@cherry-up/api",
+    "dev:web": "npm run dev --workspace=@cherry-up/web",
+    "dev:ai": "cd apps/ai-service && uvicorn app.main:app --reload --port 8001",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run prisma:generate --workspace=@cherry-up/api",
+    "db:migrate": "npm run prisma:migrate --workspace=@cherry-up/api",
+    "db:seed": "npm run prisma:seed --workspace=@cherry-up/api",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

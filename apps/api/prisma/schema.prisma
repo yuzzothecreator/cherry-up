@@ -1,0 +1,386 @@
+// Cherry-Up Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+  TRIALING
+}
+
+enum SocialPlatform {
+  INSTAGRAM
+}
+
+enum PostType {
+  IMAGE
+  VIDEO
+  CAROUSEL
+  REEL
+  STORY
+}
+
+enum RecommendationType {
+  CONTENT
+  POSTING_TIME
+  HASHTAG
+  ENGAGEMENT
+  AUDIENCE
+  COMPETITOR
+  GROWTH
+}
+
+enum NotificationType {
+  EMAIL
+  DASHBOARD
+  MILESTONE
+  WEEKLY_REPORT
+  SYSTEM
+}
+
+enum AutomationActionType {
+  SCHEDULE_POST
+  DRAFT_CAPTION
+  SUGGEST_HASHTAGS
+  ANALYZE_CONTENT
+  COMPETITOR_SCAN
+}
+
+enum AutomationStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  EXECUTED
+  FAILED
+  CANCELLED
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  CREATE
+  UPDATE
+  DELETE
+  APPROVE
+  REJECT
+  EXECUTE
+  EXPORT
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  role          UserRole  @default(USER)
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  profile           Profile?
+  socialAccounts    SocialAccount[]
+  notifications     Notification[]
+  subscription      Subscription?
+  aiUsages          AIUsage[]
+  auditLogs         AuditLog[]
+  automationActions AutomationAction[]
+  analyticsReports  AnalyticsReport[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Profile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  firstName   String?
+  lastName    String?
+  avatarUrl   String?
+  company     String?
+  timezone    String   @default("UTC")
+  preferences Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model SocialAccount {
+  id              String         @id @default(cuid())
+  userId          String
+  platform        SocialPlatform @default(INSTAGRAM)
+  username        String
+  displayName     String?
+  profileImageUrl String?
+  followerCount   Int            @default(0)
+  followingCount  Int            @default(0)
+  postCount       Int            @default(0)
+  accessTokenEnc  String?
+  refreshTokenEnc String?
+  tokenExpiresAt  DateTime?
+  isConnected     Boolean        @default(false)
+  lastSyncedAt    DateTime?
+  metadata        Json           @default("{}")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts             Post[]
+  audienceInsights  AudienceInsight[]
+  recommendations   Recommendation[]
+  automationActions AutomationAction[]
+  competitors       Competitor[]       @relation("TrackedCompetitors")
+
+  @@unique([userId, platform, username])
+  @@index([userId])
+}
+
+model Post {
+  id              String   @id @default(cuid())
+  socialAccountId String
+  externalId      String?
+  type            PostType @default(IMAGE)
+  caption         String?
+  mediaUrl        String?
+  permalink       String?
+  likes           Int      @default(0)
+  comments        Int      @default(0)
+  shares          Int      @default(0)
+  saves           Int      @default(0)
+  reach           Int      @default(0)
+  impressions     Int      @default(0)
+  engagementRate  Float    @default(0)
+  hashtags        String[] @default([])
+  postedAt        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  socialAccount   SocialAccount    @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  contentAnalysis ContentAnalysis?
+
+  @@index([socialAccountId])
+  @@index([postedAt])
+}
+
+model ContentAnalysis {
+  id              String   @id @default(cuid())
+  postId          String   @unique
+  sentiment       String?
+  topics          String[] @default([])
+  hookStrength    Float?
+  captionQuality  Float?
+  hashtagScore    Float?
+  visualAppeal    Float?
+  performanceScore Float?
+  insights        Json     @default("{}")
+  aiSummary       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model AudienceInsight {
+  id                String   @id @default(cuid())
+  socialAccountId   String
+  interestRelevance Float    @default(0)
+  engagementActivity Float   @default(0)
+  accountQuality    Float    @default(0)
+  nicheSimilarity   Float    @default(0)
+  audienceScore     Float    @default(0)
+  topInterests      String[] @default([])
+  demographics      Json     @default("{}")
+  activeHours       Json     @default("{}")
+  insights          Json     @default("{}")
+  periodStart       DateTime
+  periodEnd         DateTime
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([socialAccountId])
+}
+
+model Recommendation {
+  id              String             @id @default(cuid())
+  socialAccountId String
+  type            RecommendationType
+  title           String
+  description     String
+  priority        Int                @default(0)
+  data            Json               @default("{}")
+  isRead          Boolean            @default(false)
+  isApplied       Boolean            @default(false)
+  expiresAt       DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@index([socialAccountId])
+  @@index([type])
+}
+
+model AnalyticsReport {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  reportType  String
+  periodStart DateTime
+  periodEnd   DateTime
+  data        Json     @default("{}")
+  summary     String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  data      Json             @default("{}")
+  isRead    Boolean          @default(false)
+  sentAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String             @unique
+  plan                 SubscriptionPlan   @default(FREE)
+  status               SubscriptionStatus @default(ACTIVE)
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AIUsage {
+  id           String   @id @default(cuid())
+  userId       String
+  service      String
+  endpoint     String
+  tokensUsed   Int      @default(0)
+  cost         Float    @default(0)
+  requestData  Json     @default("{}")
+  responseMeta Json     @default("{}")
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  userId     String?
+  action     AuditAction
+  resource   String
+  resourceId String?
+  details    Json        @default("{}")
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model AutomationAction {
+  id              String               @id @default(cuid())
+  userId          String
+  socialAccountId String?
+  type            AutomationActionType
+  status          AutomationStatus     @default(PENDING_APPROVAL)
+  payload         Json                 @default("{}")
+  trustScore      Float                @default(100)
+  rateLimitKey    String?
+  scheduledFor    DateTime?
+  executedAt      DateTime?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  failureReason   String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount? @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([scheduledFor])
+}
+
+model Competitor {
+  id              String   @id @default(cuid())
+  socialAccountId String
+  username        String
+  displayName     String?
+  followerCount   Int      @default(0)
+  engagementRate  Float    @default(0)
+  postFrequency   Float    @default(0)
+  topTopics       String[] @default([])
+  contentPatterns Json     @default("{}")
+  lastAnalyzedAt  DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  socialAccount SocialAccount @relation("TrackedCompetitors", fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([socialAccountId, username])
+  @@index([socialAccountId])
+}
+
+model AccountHealth {
+  id              String   @id @default(cuid())
+  socialAccountId String   @unique
+  overallScore    Float    @default(0)
+  contentScore    Float    @default(0)
+  engagementScore Float    @default(0)
+  growthScore     Float    @default(0)
+  consistencyScore Float @default(0)
+  factors         Json     @default("{}")
+  calculatedAt    DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
