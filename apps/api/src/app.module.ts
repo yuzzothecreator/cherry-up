@@ -21,6 +21,8 @@ import { SocialAccountsModule } from './social-accounts/social-accounts.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 
+const skipBull = process.env.SKIP_BULLMQ === 'true';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -30,12 +32,16 @@ import { RolesGuard } from './auth/guards/roles.guard';
         limit: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
       },
     ]),
-    BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      },
-    }),
+    ...(skipBull
+      ? []
+      : [
+          BullModule.forRoot({
+            connection: {
+              host: process.env.REDIS_HOST || 'localhost',
+              port: parseInt(process.env.REDIS_PORT || '6379', 10),
+            },
+          }),
+        ]),
     PrismaModule,
     AuditModule,
     AuthModule,

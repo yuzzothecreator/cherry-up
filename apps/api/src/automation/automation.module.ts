@@ -6,13 +6,15 @@ import { AutomationProcessor } from './automation.processor';
 import { AuditModule } from '../audit/audit.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 
+const skipBull = process.env.SKIP_BULLMQ === 'true';
+
 @Module({
   imports: [
     AuditModule,
     NotificationsModule,
-    BullModule.registerQueue({ name: 'automation' }),
+    ...(skipBull ? [] : [BullModule.registerQueue({ name: 'automation' })]),
   ],
   controllers: [AutomationController],
-  providers: [AutomationService, AutomationProcessor],
+  providers: [AutomationService, ...(skipBull ? [] : [AutomationProcessor])],
 })
 export class AutomationModule {}

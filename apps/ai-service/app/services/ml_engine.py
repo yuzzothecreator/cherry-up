@@ -1,19 +1,28 @@
-import numpy as np
 import re
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.cluster import KMeans
+
+def _mean(values: list) -> float:
+    return sum(values) / len(values) if values else 0.0
+
+def _get_sklearn():
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    from sklearn.cluster import KMeans
+    return TfidfVectorizer, cosine_similarity, KMeans
 
 class RecommendationEngine:
     def __init__(self):
-        self.vectorizer = TfidfVectorizer(max_features=100, stop_words="english")
+        try:
+            TfidfVectorizer, _, _ = _get_sklearn()
+            self.vectorizer = TfidfVectorizer(max_features=100, stop_words="english")
+        except ImportError:
+            self.vectorizer = None
 
     def score_audience(self, posts: list, niche_keywords: list = None) -> dict:
         if not posts:
             return self._default_scores()
 
         engagement_rates = [p.get("engagementRate", 0) for p in posts]
-        avg_engagement = np.mean(engagement_rates) if engagement_rates else 0
+        avg_engagement = _mean(engagement_rates)
 
         hashtags = []
         for p in posts:
@@ -24,8 +33,9 @@ class RecommendationEngine:
         account_quality = min(100, 60 + len(posts) * 0.5)
         niche_similarity = 75.0
 
-        if niche_keywords and hashtags:
+        if niche_keywords and hashtags and self.vectorizer:
             try:
+                _, cosine_similarity, _ = _get_sklearn()
                 texts = [" ".join(hashtags)] + [" ".join(niche_keywords)]
                 tfidf = self.vectorizer.fit_transform(texts)
                 similarity = cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0]
@@ -58,10 +68,10 @@ class RecommendationEngine:
         if len(texts) < 2:
             return {"profile": "casual", "confidence": 0.3, "traits": {}}
 
-        avg_len = np.mean([len(t.split()) for t in texts])
-        avg_sentence = np.mean([len(re.split(r'[.!?]+', t)) for t in texts])
-        emoji_rate = np.mean([sum(1 for c in t if ord(c) > 0x1F600) / max(len(t), 1) for t in texts])
-        contraction_rate = np.mean([
+        avg_len = _mean([len(t.split()) for t in texts])
+        avg_sentence = _mean([len(re.split(r'[.!?]+', t)) for t in texts])
+        emoji_rate = _mean([sum(1 for c in t if ord(c) > 0x1F600) / max(len(t), 1) for t in texts])
+        contraction_rate = _mean([
             len(re.findall(r"\b\w+'\w+\b", t)) / max(len(t.split()), 1)
             for t in texts
         ])
@@ -95,10 +105,11 @@ class RecommendationEngine:
             tags = " ".join(p.get("hashtags", []))
             texts.append(f"{caption} {tags}".strip())
 
-        if len(texts) < 3:
+        if len(texts) < 3 or not self.vectorizer:
             return [{"topic": "general", "count": len(texts), "avgEngagement": 0}]
 
         try:
+            _, _, KMeans = _get_sklearn()
             tfidf = self.vectorizer.fit_transform(texts)
             n_clusters = min(3, len(texts))
             kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
@@ -107,7 +118,7 @@ class RecommendationEngine:
             clusters = []
             for i in range(n_clusters):
                 cluster_posts = [posts[j] for j in range(len(posts)) if labels[j] == i]
-                eng = np.mean([p.get("engagementRate", 0) for p in cluster_posts])
+                eng = _mean([p.get("engagementRate", 0) for p in cluster_posts])
                 clusters.append({
                     "topic": f"cluster_{i + 1}",
                     "count": len(cluster_posts),
@@ -129,7 +140,7 @@ class RecommendationEngine:
                 type_engagement[ptype] = []
             type_engagement[ptype].append(eng)
 
-        best_type = max(type_engagement, key=lambda t: np.mean(type_engagement[t])) if type_engagement else "REEL"
+        best_type = max(type_engagement, key=lambda t: _mean(type_engagement[t])) if type_engagement else "REEL"
 
         return [
             {
